@@ -1,0 +1,36 @@
+{
+    "name": "elearning-ag/autosieve",
+    "description": "Scans your imap inbox and creates sieve filters",
+    "keywords": ["sieve","imap","filter","mail"],
+    "license": "GPL-3.0",
+    "authors": [
+		{
+        	"name": "Die eLearning AG",
+            "email": "info@elearning-ag.de"
+        },
+        {
+            "name": "Severin Neumann",
+            "email": "s.neumann@elearning-ag.de"
+        }
+    ],
+	"repositories": [
+		{
+		"type": "pear",
+			"url": "http://pear.php.net"
+		}
+	],
+    "require": {
+        "php": ">=5.5.0",
+		"tedivm/Fetch": "dev-master",
+		"pear-pear.php.net/Net_Sieve": "*"
+    },
+    "require-dev": {
+        "phpspec/phpspec": "~2.0"
+    },
+    "autoload": {
+        "psr-0": {
+            "ELearningAG\\AutoSieve": "src/"
+        }
+    },
+    "minimum-stability": "dev"
+}

@@ -1,0 +1,4 @@
+/vendor
+/examples/config.php
+composer.lock
+*.swp
