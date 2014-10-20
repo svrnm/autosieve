@@ -7,12 +7,14 @@ use ELearningAG\AutoSieve\Interfaces\SieveHandler;
 class AutoSieve {
 	protected $imap;
 	protected $sieve;
-	protected $isVerbose = false;
 	protected $scriptName = 'autosieve';
 	protected $sievePlugins = ['fileinto','variables','mailbox','envelope'];
 	protected $sieveRuleName = 'Autosieve-Do-Not-Touch';
+	protected $sieveRuleBegin = 'Autosieve-Begin';
+	protected $sieveHeader = '';
 	protected $rules = [];
 	protected $mailboxes = [];
+	protected $messages = [];
 
 	public function __construct(IMAPHandler $imap, SieveHandler $sieve) {
 		$this->imap = $imap;
@@ -28,7 +30,7 @@ class AutoSieve {
 				$sieveConfig = $imapConfig;
 				$sieveConfig['port'] = 4190;
 			}
-			$sieve = new \Net_Sieve;
+			$sieve = new \ELearningAG\AutoSieve\SieveServer;
 			$sieve->connect($sieveConfig['host'], $sieveConfig['port']);
 			$sieve->login($sieveConfig['user'], $sieveConfig['password']);
 
@@ -37,23 +39,26 @@ class AutoSieve {
 			return $instance;
 	}
 
-	public function verbose($setVerbose = true) {
-		$this->isVerbose = $setVerbose;
-		return $this;
-	}
-
 	public function setScriptName($name) {
 		$this->scriptName = $name;
 		return $this;
 	}
 
+	public function getScriptName() {
+		return $this->scriptName;	
+	}
+
 	public function buildScript() {
-		$script = [];
-		$script[] = 'require ["'.implode('","',$this->sievePlugins).'"];';
-		if(!empty($this->sieveRuleName)) {
-			$script[] = '# rule:['.$this->sieveRuleName.']';
+		if(empty($this->sieveHeader)) {
+			$script = [];
+			$script[] = 'require ["'.implode('","',$this->sievePlugins).'"];';
+			if(!empty($this->sieveRuleName)) {
+				$script[] = '# rule:['.$this->sieveRuleName.']';
+			}
+			$script[] = 'if true {';
+		} else {
+			$script = $this->sieveHeader;
 		}
-		$script[] = 'if true {';
 		$script[] = implode(PHP_EOL, array_map(function($rule) {
 			return implode(PHP_EOL, $rule);
 		}, $this->rules));
@@ -62,35 +67,43 @@ class AutoSieve {
 	}
 
 
-	public function save() {
-		//$scripts = $this->sieve->listScripts();
-		//if(!in_array($this->scriptName, $scripts)) {
-		//$e = $sieve->installScript($this->scriptName, $this->buildScript(), true);
-		//}
-		//if($e !== true) {
-		//	throw $e;
-		//}
-			//return $this;
-			//
-						/*
-			* Move to Save
-			if (!$this->imap->hasMailBox($mailbox)) {
-				if($this->imap->createMailBox($mailbox) && $imap->subscribeToMailBox($mailbox)) {
-					echo "Could not create mailbox";
-				}
-			}*/
+	protected function saveSieve() {
+		$scripts = $this->sieve->listScripts();
+		if(in_array($this->scriptName, $scripts)) {
+				$old = explode(PHP_EOL, $this->sieve->getScript($this->scriptName));
+				array_pop($old);		
+				array_pop($old);		
+				$this->sieveHeader = $old;
+		}
+		$e = $this->sieve->installScript($this->scriptName, $this->buildScript(), true);
+		if($e !== true) {
+			throw new Exception($e->message);
+		}
+	}
 
+	protected function saveImap() {
+			foreach($this->mailboxes as $mailbox) {
+			if(!$this->imap->hasMailBox($mailbox)) {
+					$create = $this->imap->createMailBox($mailbox); 
+					if(!$create) {
+						throw new Exception('Could not create mailbox');
+					}
+					$subscribe = $this->imap->subscribeToMailBox($mailbox);
+					if(!$subscribe) {
+						throw new Exception('Could not subscribe to mailbox');
+					}
+			}
+			foreach($this->messages[$mailbox] as $message) {
+				$message->moveToMailbox($mailbox);
+			}
+		}
 
 	}
 
-	public function debug($m) {
-		if($this->isVerbose) {
-			if(is_string($m)) {
-				echo $m;
-			} else {
-				var_dump($m);
-			}
-		}
+	public function save() {
+		$this->saveSieve();
+		$this->saveImap();
+		return $this;
 	}
 
 	public function addressToMailbox($address) {
@@ -123,6 +136,10 @@ class AutoSieve {
 		return $this->mailboxes;
 	}
 
+	public function addMessageToMailbox($message, $mailbox) {
+		$this->messages[$mailbox][] = $message;
+	}
+
 	public function addSenderMailboxes() {
 		foreach ($this->imap->getMessages() as $message) {
 			$from = $message->getAddresses('from');
@@ -133,10 +150,13 @@ class AutoSieve {
 			$rule = [
 				'if envelope :matches :domain "From" "'.$domain.'" {',
 				'  if envelope :matches :localpart "From" "'.$localpart.'" {',
-				'    fileinto '.$mailbox.';'
+				'    fileinto "'.$mailbox.'";',
+				'  }',
+				'}'
 			];
 			$this->addRule($rule);
 			$this->addMailbox($mailbox);
+			$this->addMessageToMailbox($message, $mailbox);
 		}
 		return $this;
 	}

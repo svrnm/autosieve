@@ -1,5 +1,4 @@
 <?php
-
 namespace spec\ELearningAG\AutoSieve;
 
 use PhpSpec\ObjectBehavior;
@@ -65,8 +64,26 @@ class AutoSieveSpec extends ObjectBehavior
 		      'if true {',
 		      'if envelope :matches :domain "From" "example.com" {',
 		      '  if envelope :matches :localpart "From" "test" {',
-		      '    fileinto INBOX.Example.Test Tester;',
+		      '    fileinto "INBOX.Example.Test Tester";',
+			  '  }',
+			  '}',
 		      '}'
 			]));
+	}
+
+	function it_saves_sieve_rules_and_mailboxes($imap, $sieve, \Fetch\Message $message) {
+			$message->getAddresses('from')->willReturn(['name' => 'Test Tester', 'address' => 'test@example.com']);
+			$message->moveToMailBox(Argument::type('string'))->willReturn(true);
+			$sieve->listScripts()->willReturn([
+				'anotherScript'
+			]);
+			$sieve->installScript(Argument::type('string'), Argument::type('string'), Argument::type('bool'))->willReturn(true);		
+			$imap->getMessages()->willReturn([
+				$message
+			]);
+			$imap->hasMailbox(Argument::type('string'))->willReturn(false);
+			$imap->createMailBox(Argument::type('string'))->willReturn(true);
+			$imap->subscribeToMailBox(Argument::type('string'))->willReturn(true);
+			$this->addSenderMailboxes()->save();
 	}
 }

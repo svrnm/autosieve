@@ -1,4 +1,5 @@
 <?php
-	require_once('../vendor/autoload.php');
-	ELearningAG\AutoSieve\AutoSieve::getInstance()
-?>
+require_once('../vendor/autoload.php');
+require_once('./config.php');
+
+$autosieve = ELearningAG\AutoSieve\AutoSieve::getInstance($config['imap'])->addSenderMailboxes()->save();
